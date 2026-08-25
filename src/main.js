@@ -15,6 +15,10 @@ import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryInstallationsLayer from './data/militaryInstallations.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
+import siteWindLayer from './data/siteWind.js';
+import siteFloodLayer from './data/siteFlood.js';
+import siteHydroLayer from './data/siteHydro.js';
+import { initSitePack } from './data/sitePack.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { SceneDirector } from './scenes/director.js';
@@ -206,6 +210,14 @@ async function init() {
       loaderStatus.textContent = 'Restoring shared view...';
     }
 
+    // Site pack (optional, gitignored config/site.local.json served at
+    // /api/site): must resolve before the UI builds location pills, because
+    // it injects the SITE fly-to into CITY_POIS. Absent/invalid pack → null,
+    // and the app stays siteless. The three site layers register regardless:
+    // finalizeRegistrations requires registration to match the registry
+    // exactly, and the layers are keyless viewport layers anywhere on Earth.
+    await initSitePack();
+
     // Initialize data layer manager
     const dataManager = new DataLayerManager(viewer, {
       allowQaRegistration: import.meta.env.DEV,
@@ -224,6 +236,9 @@ async function init() {
     dataManager.register(militaryInstallationsLayer);
     dataManager.register(militaryAwarenessLayer);
     militaryAwarenessLayer.attachDataManager(dataManager);
+    dataManager.register(siteWindLayer);
+    dataManager.register(siteFloodLayer);
+    dataManager.register(siteHydroLayer);
     for (const layer of localDataLayers) {
       dataManager.register(layer);
     }

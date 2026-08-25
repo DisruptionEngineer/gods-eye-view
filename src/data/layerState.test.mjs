@@ -155,9 +155,15 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 16);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 16);
-  assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
+  assert.equal(REGISTERED_LAYER_IDS.length, 19);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 19);
+  // The pre-site-pack registry (first 16 entries) is alphabetical by id. The
+  // site-pack layers (2026-08-25) were APPENDED after `traffic` — never
+  // inserted, since registry order owns share-link URL ordering — so
+  // alphabetical order intentionally breaks at the tail. Pin the base order
+  // plus the exact appended tail instead of the whole-array sort.
+  assert.deepEqual(REGISTERED_LAYER_IDS.slice(0, 16), [...REGISTERED_LAYER_IDS.slice(0, 16)].sort());
+  assert.deepEqual(REGISTERED_LAYER_IDS.slice(16), ['site-flood', 'site-hydro', 'site-wind']);
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
     /Duplicate layer-state id/,
