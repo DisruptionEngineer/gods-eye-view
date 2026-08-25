@@ -4,6 +4,27 @@
 **Status:** Approved (design review in chat, 2026-08-25)
 **Scope:** Personal fork only — not intended for upstream PR in this form.
 
+> **Plan-time amendments (2026-08-25).** Implementation planning against the
+> real code surfaced constraints this spec missed; the plan
+> (`docs/superpowers/plans/2026-08-25-site-pack.md`) is authoritative where
+> they conflict:
+> 1. `finalizeRegistrations` requires registration ↔ `LAYER_STATE_REGISTRY`
+>    to match exactly in both directions, so the three layers register
+>    unconditionally; "no pack → stock behavior" becomes "no pack → three new
+>    disabled layer rows, no site features".
+> 2. Camera gating uses `camera.moveEnd`, not `camera.changed` +
+>    `percentageChanged` (a shared camera global multiple layers would fight
+>    over).
+> 3. `createRetryableLoader` memoizes success permanently (one-shot loads) —
+>    unsuitable for polling. Wind uses direct fetch + a 30 s failure cooldown.
+> 4. The dedicated site panel row is deferred; v1 surfaces the pack via the
+>    SITE fly-to pill, the toggle rows, and a console load line.
+> 5. Registry entries are appended after `traffic` (registry order owns
+>    share-link URL ordering). Tokens: `site-wind` `n`, `site-flood` `l`,
+>    `site-hydro` `y`.
+> 6. Outside-US coverage: skip fetch, count 0, console note — not a feed
+>    error state.
+
 ## Overview
 
 Teach God's Eye View about one specific place ("the site" — the operator's own
