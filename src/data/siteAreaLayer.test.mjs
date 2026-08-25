@@ -39,3 +39,103 @@ test('inUsCoverage accepts CONUS/AK/HI and rejects elsewhere', () => {
   assert.equal(inUsCoverage({ west: 2.2, south: 48.8, east: 2.4, north: 48.9 }), false);
   assert.equal(inUsCoverage({ west: 139.6, south: 35.6, east: 139.8, north: 35.7 }), false);
 });
+
+import * as Cesium from 'cesium';
+import { createSiteAreaLayer } from './siteAreaLayer.js';
+
+function fakeViewer({ heightM, latDeg = 30.2, lonDeg = -97.7 }) {
+  const listeners = new Set();
+  return {
+    state: { heightM, latDeg, lonDeg },
+    fire() { for (const fn of [...listeners]) fn(); },
+    camera: {
+      get positionCartographic() {
+        return {
+          height: this._owner.state.heightM,
+          latitude: Cesium.Math.toRadians(this._owner.state.latDeg),
+          longitude: Cesium.Math.toRadians(this._owner.state.lonDeg),
+        };
+      },
+      moveEnd: {
+        addEventListener: (fn) => listeners.add(fn),
+        removeEventListener: (fn) => listeners.delete(fn),
+      },
+    },
+    scene: { canvas: null },
+    dataSources: { add: async (ds) => ds, remove: () => true },
+  };
+}
+
+function makeViewer(opts) {
+  const v = fakeViewer(opts);
+  v.camera._owner = v;
+  return v;
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('contract: gate-exit clears counts and re-descend re-presents', async () => {
+  let fetches = 0;
+  const layer = createSiteAreaLayer({
+    id: 't', name: 'T', icon: 'x', source: 'S',
+    fetchArea: async () => { fetches += 1; return { n: 3 }; },
+    buildDataSources: async () => [],
+    countFeatures: (p) => ({ count: p.n, error: null }),
+  });
+  const viewer = makeViewer({ heightM: 5000 });
+  layer.init(viewer);
+  layer.enable(viewer);
+  await tick(); await tick();
+  assert.equal(fetches, 1);
+  assert.equal(layer.getStats().count, 3);
+  viewer.state.heightM = 20000;
+  viewer.fire();
+  await tick(); await tick();
+  assert.equal(layer.getStats().count, 0);
+  viewer.state.heightM = 5000;
+  viewer.fire();
+  await tick(); await tick();
+  assert.equal(layer.getStats().count, 3);
+  layer.disable(viewer);
+});
+
+test('contract: outside US coverage skips fetch, count 0, no error', async () => {
+  let fetches = 0;
+  const layer = createSiteAreaLayer({
+    id: 't1', name: 'T1', icon: 'x', source: 'S',
+    fetchArea: async () => { fetches += 1; return { n: 3 }; },
+    buildDataSources: async () => [],
+    countFeatures: (p) => ({ count: p.n, error: null }),
+  });
+  const viewer = makeViewer({ heightM: 5000, latDeg: 35.6, lonDeg: 139.7 });
+  layer.init(viewer);
+  layer.enable(viewer);
+  await tick(); await tick();
+  assert.equal(fetches, 0);
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(layer.getStats().error, null);
+  layer.disable(viewer);
+});
+
+test('contract: a settle during an in-flight fetch is not dropped', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let fetches = 0;
+  const layer = createSiteAreaLayer({
+    id: 't2', name: 'T2', icon: 'x', source: 'S',
+    fetchArea: async (bbox) => { fetches += 1; if (fetches === 1) await gate; return { n: 1 }; },
+    buildDataSources: async () => [],
+    countFeatures: (p) => ({ count: p.n, error: null }),
+  });
+  const viewer = makeViewer({ heightM: 5000 });
+  layer.init(viewer);
+  layer.enable(viewer);
+  await tick();
+  viewer.state.latDeg = 30.25;
+  viewer.fire();
+  await tick();
+  release();
+  await tick(); await tick(); await tick();
+  assert.equal(fetches, 2);
+  layer.disable(viewer);
+});

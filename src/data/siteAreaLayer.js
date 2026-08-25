@@ -76,6 +76,7 @@ export function createSiteAreaLayer({
   let _dataSources = [];
   let _lastKey = null;
   let _fetching = false;
+  let _pendingRefresh = false;
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
@@ -109,7 +110,13 @@ export function createSiteAreaLayer({
   }
 
   async function refresh() {
-    if (!_enabled || _fetching) return;
+    if (!_enabled) return;
+    if (_fetching) {
+      // A camera settle during an in-flight fetch must not be dropped:
+      // re-evaluate the viewport once the current fetch completes.
+      _pendingRefresh = true;
+      return;
+    }
 
     if (altitudeM() > gateAltitudeM) {
       // Clear the key gate too: without this, re-descending into the SAME
@@ -151,6 +158,10 @@ export function createSiteAreaLayer({
       console.warn(`[Data:${name}]`, _lastError);
     } finally {
       _fetching = false;
+      if (_pendingRefresh) {
+        _pendingRefresh = false;
+        void refresh();
+      }
     }
   }
 
