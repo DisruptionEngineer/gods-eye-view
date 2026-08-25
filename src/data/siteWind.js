@@ -165,6 +165,7 @@ function viewportAnchor(viewer) {
   };
 }
 
+/** Create the site-wind layer module (Open-Meteo grid, camera-gated). @returns {object} Layer module for DataLayerManager. */
 export function createSiteWindLayer() {
   let _viewer = null;
   let _dataSource = null;
