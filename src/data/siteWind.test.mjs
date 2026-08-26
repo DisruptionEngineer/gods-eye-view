@@ -84,3 +84,90 @@ test('windRefetchNeeded triggers on anchor moves beyond a third of the span', ()
 test('activation altitude is the spec value', () => {
   assert.equal(WIND_ACTIVATION_ALTITUDE_M, 6000);
 });
+
+import * as Cesium from 'cesium';
+import { createSiteWindLayer } from './siteWind.js';
+
+function fakeViewer({ heightM, latDeg = 30.2, lonDeg = -97.7 }) {
+  const listeners = new Set();
+  return {
+    state: { heightM, latDeg, lonDeg },
+    fire() { for (const fn of [...listeners]) fn(); },
+    camera: {
+      get positionCartographic() {
+        return {
+          height: this._owner.state.heightM,
+          latitude: Cesium.Math.toRadians(this._owner.state.latDeg),
+          longitude: Cesium.Math.toRadians(this._owner.state.lonDeg),
+        };
+      },
+      moveEnd: {
+        addEventListener: (fn) => listeners.add(fn),
+        removeEventListener: (fn) => listeners.delete(fn),
+      },
+    },
+    scene: { canvas: null },
+    dataSources: { add: async (ds) => ds, remove: () => true },
+  };
+}
+
+function makeViewer(opts) {
+  const v = fakeViewer(opts);
+  v.camera._owner = v;
+  return v;
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** `n` identical Open-Meteo rows at the given wind speed (one per lattice point). */
+function rowsAtSpeed(n, speedMs) {
+  return Array.from({ length: n }, () => ({
+    current: { wind_speed_10m: speedMs, wind_direction_10m: 90, wind_gusts_10m: speedMs },
+  }));
+}
+
+test('a settle during an in-flight fetch does not let the stale response win', async () => {
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  let fetchCalls = 0;
+  const fetchImpl = async () => {
+    fetchCalls += 1;
+    if (fetchCalls === 1) {
+      await firstGate;
+      return { ok: true, json: async () => rowsAtSpeed(9, 3) };
+    }
+    return { ok: true, json: async () => rowsAtSpeed(9, 9) };
+  };
+
+  const setEntriesCalls = [];
+  const overlayHost = {
+    setEntries: (id, entries, opts) => { setEntriesCalls.push({ id, entries, opts }); },
+    setVisible: () => {},
+    clearSource: () => {},
+  };
+
+  const layer = createSiteWindLayer({ overlayHost, fetchImpl, arrowImageFactory: () => null });
+  const viewer = makeViewer({ heightM: 3000 });
+  layer.init(viewer);
+  layer.enable(viewer); // starts fetch 1 (forced), parks on firstGate
+  await tick(); await tick();
+  assert.equal(fetchCalls, 1);
+
+  // Move the anchor well beyond the refetch threshold and settle again.
+  viewer.state.latDeg += 1500 / 111320;
+  viewer.fire(); // starts fetch 2, resolves immediately
+  await tick(); await tick(); await tick();
+  assert.equal(fetchCalls, 2);
+
+  releaseFirst(); // stale fetch 1 resolves last
+  await tick(); await tick(); await tick();
+
+  // Only fetch 2 ever reached setEntries — the stale fetch 1 was dropped by
+  // the epoch guard rather than overwriting fetch 2's already-rendered grid.
+  assert.equal(setEntriesCalls.length, 1);
+  const [finalCall] = setEntriesCalls;
+  assert.ok(finalCall.entries.every((e) => e.title.includes('9.0')));
+  assert.equal(layer.getStats().count, 9);
+
+  layer.disable(viewer);
+});

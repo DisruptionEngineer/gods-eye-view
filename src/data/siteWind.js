@@ -6,6 +6,7 @@ import {
 } from '../overlays/worldOverlay.js';
 import { screenProjectedRotation } from './iconOrientation.js';
 import { getSitePack, isOverSite, metersToDegrees } from './sitePack.js';
+import { governorRequestRender } from '../renderGovernor.js';
 
 /**
  * Site wind grid — Open-Meteo point samples rendered as ground-clamped
@@ -165,8 +166,19 @@ function viewportAnchor(viewer) {
   };
 }
 
-/** Create the site-wind layer module (Open-Meteo grid, camera-gated). @returns {object} Layer module for DataLayerManager. */
-export function createSiteWindLayer() {
+/**
+ * Create the site-wind layer module (Open-Meteo grid, camera-gated).
+ * @param {object} [deps] Injection seam for tests, mirroring firmsHeatmap.js.
+ * @param {object} [deps.overlayHost] World-overlay host (setEntries/setVisible/clearSource).
+ * @param {Function} [deps.fetchImpl] fetch-compatible function.
+ * @param {Function} [deps.arrowImageFactory] Builds the arrow billboard image.
+ * @returns {object} Layer module for DataLayerManager.
+ */
+export function createSiteWindLayer({
+  overlayHost = { setEntries: setOverlayEntries, setVisible: setOverlaySourceVisible, clearSource: clearOverlaySource },
+  fetchImpl = (...args) => fetch(...args),
+  arrowImageFactory = buildArrowImage,
+} = {}) {
   let _viewer = null;
   let _dataSource = null;
   let _arrowImage = null;
@@ -178,13 +190,9 @@ export function createSiteWindLayer() {
   let _lastSpanM = 0;
   let _lastFailureAt = 0;
   let _moveEndRemover = null;
+  /** Bumped on every refetch() call; a response is dropped if a newer fetch has since started. */
+  let _fetchEpoch = 0;
   const FAILURE_COOLDOWN_MS = 30000;
-
-  const overlayHost = {
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
-  };
 
   function altitudeM() {
     const carto = _viewer?.camera?.positionCartographic;
@@ -270,14 +278,21 @@ export function createSiteWindLayer() {
   // forever. Failure cooldown keeps a panning camera from hammering a
   // broken upstream; the 10-min manager tick forces past it.
   async function refetch(plan) {
-    const response = await fetch(buildWindGridUrl(plan.points));
+    const epoch = ++_fetchEpoch;
+    const response = await fetchImpl(buildWindGridUrl(plan.points));
     if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
-    const samples = parseOpenMeteoSamples(await response.json(), plan.points);
+    const json = await response.json();
+    // A newer fetch (triggered by a later camera settle) started and finished
+    // while this one was still in flight; drop this stale response instead of
+    // rendering a grid anchored at a now-superseded viewport.
+    if (epoch !== _fetchEpoch) return;
+    const samples = parseOpenMeteoSamples(json, plan.points);
     _lastAnchor = plan.anchor;
     _lastSpanM = plan.spanM;
     renderSamples(samples);
     _lastUpdate = Date.now();
     _lastError = null;
+    governorRequestRender('site-wind-data');
   }
 
   async function refresh({ force = false } = {}) {
@@ -285,6 +300,7 @@ export function createSiteWindLayer() {
     if (altitudeM() > WIND_ACTIVATION_ALTITUDE_M) {
       clearSamples();
       _lastAnchor = null;
+      governorRequestRender('site-wind-data');
       return;
     }
     const plan = currentPlan();
@@ -311,7 +327,7 @@ export function createSiteWindLayer() {
 
     init(viewer) {
       _viewer = viewer;
-      _arrowImage = buildArrowImage();
+      _arrowImage = arrowImageFactory();
       _dataSource = new Cesium.CustomDataSource('site-wind');
       _dataSource.show = false;
       viewer.dataSources.add(_dataSource);
