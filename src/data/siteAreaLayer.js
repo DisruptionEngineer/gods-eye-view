@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { siteBounds, isOverSite, metersToDegrees } from './sitePack.js';
+import { governorRequestRender } from '../renderGovernor.js';
 
 /**
  * Shared skeleton for camera-driven, bbox-fetching area layers (site-flood,
@@ -124,6 +125,8 @@ export function createSiteAreaLayer({
       await removeDataSources();
       _lastKey = null;
       _count = 0;
+      _lastError = null;
+      governorRequestRender(`${id}-data`);
       return;
     }
 
@@ -140,6 +143,7 @@ export function createSiteAreaLayer({
       _lastKey = key;
       _count = 0;
       _lastError = null;
+      governorRequestRender(`${id}-data`);
       console.log(`[Data:${name}] Outside US coverage — nothing to fetch`);
       return;
     }
@@ -153,6 +157,7 @@ export function createSiteAreaLayer({
       }
       _lastKey = key;
       await present(payload);
+      governorRequestRender(`${id}-data`);
     } catch (e) {
       _lastError = e?.message || `${source} error`;
       console.warn(`[Data:${name}]`, _lastError);
