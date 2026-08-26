@@ -194,6 +194,15 @@ async function init() {
     });
     await mapStackController.setStack(tileset ? 'photoreal' : 'osm', { silent: true });
 
+    // Site pack (optional, gitignored config/site.local.json served at
+    // /api/site): must resolve before StyleManager (constructed immediately
+    // below) builds the location pill row, because it injects the SITE
+    // fly-to into CITY_POIS. Absent/invalid pack → null, and the app stays
+    // siteless. The three site layers register regardless: finalizeRegistrations
+    // requires registration to match the registry exactly, and the layers are
+    // keyless viewport layers anywhere on Earth.
+    await initSitePack();
+
     // Initialize the style manager (post-processing, HUD, locations, share links)
     const styleManager = new StyleManager(viewer, { mapStackController });
     // The previous multi-canvas weather compositor remains disabled. Cockpit
@@ -209,14 +218,6 @@ async function init() {
     } else {
       loaderStatus.textContent = 'Restoring shared view...';
     }
-
-    // Site pack (optional, gitignored config/site.local.json served at
-    // /api/site): must resolve before the UI builds location pills, because
-    // it injects the SITE fly-to into CITY_POIS. Absent/invalid pack → null,
-    // and the app stays siteless. The three site layers register regardless:
-    // finalizeRegistrations requires registration to match the registry
-    // exactly, and the layers are keyless viewport layers anywhere on Earth.
-    await initSitePack();
 
     // Initialize data layer manager
     const dataManager = new DataLayerManager(viewer, {
