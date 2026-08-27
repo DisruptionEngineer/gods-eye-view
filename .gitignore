@@ -10,3 +10,6 @@ output/
 .DS_Store
 .gstack/
 3d-models/
+
+# Operator site pack — carries home coordinates, never commit
+config/site.local.json

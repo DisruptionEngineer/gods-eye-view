@@ -3,6 +3,17 @@
 This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
+## [Unreleased] — 2026-08-25
+
+- **Site pack (personal-fork feature):** optional gitignored `config/site.local.json`
+  (served at `/api/site`, example in `config/site.example.json`) adds a SITE
+  fly-to and lot anchoring. Reserved `sensors[]`/`cameras[]` envelopes are
+  validated but inert (slice 2).
+- **Three new keyless layers:** Wind Grid (Open-Meteo, modeled, ≤6 km),
+  Flood Zones (FEMA NFHL, ≤15 km, US), Hydrology (USGS NHDPlus HR
+  flowlines + waterbodies, ≤15 km, US). Camera-driven via `camera.moveEnd`;
+  share-link tokens `n`/`l`/`y`.
+
 ## [Unreleased] — 2026-08-24
 
 ### Added

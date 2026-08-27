@@ -4749,6 +4749,57 @@ function adsbLolProxy() {
 }
 
 /**
+ * Testable middleware for GET /api/site: serves the operator's local site
+ * pack (config/site.local.json by default; override via GEV_SITE_FILE).
+ * The file is gitignored — it carries home coordinates — so it is read per
+ * request (no-store) and errors never echo filesystem details.
+ * @param {object} [options]
+ * @param {Function} [options.readFileImpl] Injected fs.readFile(path, 'utf8') for tests.
+ * @param {object} [options.env] Environment map (defaults to process.env).
+ * @returns {Function} Connect-style async (req, res) handler.
+ */
+export function createSitePackMiddleware({ readFileImpl = null, env = process.env } = {}) {
+  return async (req, res) => {
+    if ((req.method || 'GET') !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'method not allowed' }));
+      return;
+    }
+    const filePath = env.GEV_SITE_FILE || 'config/site.local.json';
+    try {
+      const read = readFileImpl
+        || (await import('node:fs/promises')).readFile;
+      const body = await read(filePath, 'utf8');
+      JSON.parse(body); // reject unparseable packs here, not in the client
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(body);
+    } catch (e) {
+      if (e && e.code === 'ENOENT') {
+        res.writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: 'no site pack configured' }));
+        return;
+      }
+      console.error('[SitePack] site file unreadable:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'site pack unreadable' }));
+    }
+  };
+}
+
+/**
+ * Vite plugin: site pack endpoint (see createSitePackMiddleware).
+ * @returns {import('vite').Plugin}
+ */
+function sitePackEndpoint() {
+  return {
+    name: 'site-pack-endpoint',
+    configureServer(server) {
+      server.middlewares.use('/api/site', createSitePackMiddleware());
+    },
+  };
+}
+
+/**
  * Vite plugin: AISStream live vessel cache.
  *
  * AISStream does not support browser CORS and requires a private API key, so
@@ -7360,6 +7411,7 @@ export default defineConfig(({ mode }) => {
       trackBackfillProxies(),
       openAiRealtimeProxy(),
       googlePlacesContextProxy(),
+      sitePackEndpoint(),
     ],
     server: {
       host: env.HOST || 'localhost',

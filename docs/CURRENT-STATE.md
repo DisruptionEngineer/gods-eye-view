@@ -1,7 +1,47 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: August 25, 2026
 
+> **2026-08-25 — site pack (personal-fork feature).** An optional, gitignored
+> `config/site.local.json` (`GEV_SITE_FILE` overrides the path; default is
+> `config/site.local.json`; example schema at `config/site.example.json`) is
+> served read-only at `/api/site` and loaded by `src/data/sitePack.js`, which
+> validates it and injects a SITE fly-to via `CITY_POIS.site`. The reserved
+> `sensors[]`/`cameras[]` envelopes are validated but **inert** — reported only
+> as planned counts (slice 2 wires them up). The client always issues one GET
+> `/api/site` per boot regardless of whether the file exists; a missing file
+> just 404s there and the pack resolves to `null`, so no SITE POI appears —
+> nothing in this feature is required to run the app.
+>
+> **Three new keyless layers, appended after `traffic` in the registry** (order
+> owns share-link URLs, so these were added at the tail, never inserted):
+> `site-wind` (token `n`, Open-Meteo, LOD gate ≤6 km), `site-flood` (token `l`,
+> FEMA NFHL layer 28, LOD gate ≤15 km), `site-hydro` (token `y`, USGS NHDPlus HR
+> layers **3 and 9** — layer 3 is flowlines, layer 9 is waterbodies (not layer
+> 4) — LOD gate ≤15 km, with degraded partial results if one of the two
+> sub-fetches fails). All three gate on `camera.moveEnd`, never
+> `camera.changed`/`percentageChanged` — `moveEnd` is the only event that means
+> "the camera has actually settled." Flood and hydro share the
+> `createSiteAreaLayer` skeleton, whose `_pendingRefresh` flag re-triggers a
+> fetch if a `moveEnd` lands while a prior fetch for that layer is still in
+> flight, so a settle mid-fetch is never silently dropped. Wind is a separate
+> module and does not use that skeleton or its queue; instead a per-fetch
+> `_fetchEpoch` counter is bumped on every `refetch()` call, and a response is
+> discarded if a newer fetch has since started, so an overlapping settle can
+> never render a grid anchored at a stale position. Wind also does **not** use
+> `createRetryableLoader` (it memoizes success permanently, which is wrong for
+> a layer that must re-fetch on every camera settle) — it does a direct fetch
+> with a 30 s failure cooldown instead.
+>
+> Wind is explicitly labeled **MODELED**, not observed — every wind fetch
+> stamps its `source` string as `Open-Meteo (modeled)` so nothing downstream
+> can present model output as live sensor data. Wind direction from Open-Meteo
+> is FROM-direction; the layer flips it to a TO-direction bearing for the arrow
+> glyphs (`(fromDeg + 180) % 360`) and renders via `screenProjectedRotation`.
+> Flood and hydrology both gate on US coverage: a camera settle outside the
+> continental US coverage envelope skips the fetch entirely, reports a count of
+> 0, and logs a console note — it is not treated as an error state.
+>
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
 > settles, a fresh session gets one card offering **Live Contacts · Space

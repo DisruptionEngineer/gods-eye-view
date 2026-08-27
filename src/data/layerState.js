@@ -291,6 +291,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
+  // Site-pack layers (2026-08-25): appended, never inserted — order above
+  // owns existing share-link URL ordering.
+  Object.freeze({ id: 'site-flood', token: 'l', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'site-hydro', token: 'y', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'site-wind', token: 'n', disposition: 'enabled-only' }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(LAYER_STATE_REGISTRY.map((entry) => entry.id));

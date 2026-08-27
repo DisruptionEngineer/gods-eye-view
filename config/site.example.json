@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "Example Site",
+  "home": { "lat": 30.2669, "lon": -97.7729 },
+  "lotPolygon": [
+    [-97.7739, 30.2661],
+    [-97.7719, 30.2661],
+    [-97.7719, 30.2677],
+    [-97.7739, 30.2677],
+    [-97.7739, 30.2661]
+  ],
+  "neighborhoodHalfM": 500,
+  "camera": { "headingDeg": 0, "pitchDeg": -35, "rangeM": 400 },
+  "layers": {
+    "site-wind": { "enabled": true, "grid": [3, 3] },
+    "site-flood": { "enabled": true },
+    "site-hydro": { "enabled": true }
+  },
+  "sensors": [],
+  "cameras": []
+}
