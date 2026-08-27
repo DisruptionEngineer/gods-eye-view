@@ -15,6 +15,10 @@ import aisLiveVesselsLayer from './data/aisLiveVessels.js';
 import militaryInstallationsLayer from './data/militaryInstallations.js';
 import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
+import siteWindLayer from './data/siteWind.js';
+import siteFloodLayer from './data/siteFlood.js';
+import siteHydroLayer from './data/siteHydro.js';
+import { initSitePack } from './data/sitePack.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { SceneDirector } from './scenes/director.js';
@@ -190,6 +194,15 @@ async function init() {
     });
     await mapStackController.setStack(tileset ? 'photoreal' : 'osm', { silent: true });
 
+    // Site pack (optional, gitignored config/site.local.json served at
+    // /api/site): must resolve before StyleManager (constructed immediately
+    // below) builds the location pill row, because it injects the SITE
+    // fly-to into CITY_POIS. Absent/invalid pack → null, and the app stays
+    // siteless. The three site layers register regardless: finalizeRegistrations
+    // requires registration to match the registry exactly, and the layers are
+    // keyless viewport layers anywhere on Earth.
+    await initSitePack();
+
     // Initialize the style manager (post-processing, HUD, locations, share links)
     const styleManager = new StyleManager(viewer, { mapStackController });
     // The previous multi-canvas weather compositor remains disabled. Cockpit
@@ -224,6 +237,9 @@ async function init() {
     dataManager.register(militaryInstallationsLayer);
     dataManager.register(militaryAwarenessLayer);
     militaryAwarenessLayer.attachDataManager(dataManager);
+    dataManager.register(siteWindLayer);
+    dataManager.register(siteFloodLayer);
+    dataManager.register(siteHydroLayer);
     for (const layer of localDataLayers) {
       dataManager.register(layer);
     }
